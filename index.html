@@ -32,6 +32,57 @@
       margin-top: 40vh;
       text-align: center;
     }
+    .pill-bar {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 50;
+      color: white;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 11px;
+      transition: all 0.2s;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .pill-bar:hover {
+      background: rgba(0, 0, 0, 0.95);
+      transform: translateX(-50%) translateY(-2px);
+    }
+    .pill-url {
+      opacity: 0.9;
+      font-family: monospace;
+      letter-spacing: 0.3px;
+    }
+    .pill-refresh {
+      cursor: pointer;
+      opacity: 0.7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      border: none;
+      background: transparent;
+      color: white;
+      padding: 4px;
+      border-radius: 50%;
+    }
+    .pill-refresh:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .pill-refresh svg {
+      width: 14px;
+      height: 14px;
+    }
   </style>
 </head>
 <body>
@@ -106,7 +157,15 @@
     }
 
     function renderDevServer(url) {
-      container.innerHTML = `<iframe src="${url}"></iframe>`;
+      container.innerHTML = `
+        <iframe id="preview-frame" src="${url}"></iframe>
+        <div class="pill-bar">
+          <div class="pill-url">${url}</div>
+          <button class="pill-refresh" onclick="document.getElementById('preview-frame').contentWindow.location.reload();" title="Refresh">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+        </div>
+      `;
     }
 
     function renderPreview(html, path) {
