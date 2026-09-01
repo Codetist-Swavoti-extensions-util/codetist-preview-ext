@@ -49,12 +49,35 @@
     let currentPath = null;
     let pollInterval = null;
     let lastContent = null;
+    let devServerUrl = null;
 
     // Use the native Codetist ideAPI injected by the IDE
     async function loadActiveFile() {
       if (!window.ideAPI) return;
 
       try {
+        // 1. Check if there's a running dev server in the terminal
+        if (typeof window.ideAPI.getTerminalOutput === 'function') {
+          const terminalOutput = await window.ideAPI.getTerminalOutput();
+          if (terminalOutput) {
+            // Match http://localhost:PORT or http://127.0.0.1:PORT
+            const match = terminalOutput.match(/http:\/\/(localhost|127\.0\.0\.1):\d+/i);
+            if (match) {
+              const url = match[0];
+              if (devServerUrl !== url) {
+                devServerUrl = url;
+                lastContent = null;
+                currentPath = null;
+                renderDevServer(url);
+              }
+              return; // We found a dev server, skip HTML file preview
+            } else {
+              devServerUrl = null;
+            }
+          }
+        }
+
+        // 2. If no dev server, fallback to the active HTML file
         const activePath = await window.ideAPI.getActiveFilePath();
         
         if (!activePath) {
@@ -62,9 +85,8 @@
           return;
         }
 
-        // Only preview HTML files for this basic extension
         if (!activePath.endsWith('.html')) {
-          showEmptyState('Open an HTML file to preview it.');
+          showEmptyState('Open an HTML file or run a dev server (npm run dev) to preview.');
           return;
         }
 
@@ -79,6 +101,10 @@
       } catch (err) {
         console.error('Preview error:', err);
       }
+    }
+
+    function renderDevServer(url) {
+      container.innerHTML = `<iframe src="${url}"></iframe>`;
     }
 
     function renderPreview(html, path) {
