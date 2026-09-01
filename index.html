@@ -39,7 +39,7 @@
     <div class="empty-state">
       <div class="empty-state-content">
         <h3>Live Preview</h3>
-        <p>Run dev server.</p>
+        <p>Open an HTML file to preview it.</p>
       </div>
     </div>
   </div>
@@ -60,10 +60,12 @@
         if (typeof window.ideAPI.getTerminalOutput === 'function') {
           const terminalOutput = await window.ideAPI.getTerminalOutput();
           if (terminalOutput) {
-            // Match http://localhost:PORT or http://127.0.0.1:PORT
-            const match = terminalOutput.match(/http:\/\/(localhost|127\.0\.0\.1):\d+/i);
-            if (match) {
-              const url = match[0];
+            // Strip ANSI codes from the output (e.g. colors, bold)
+            const cleanOutput = terminalOutput.replace(/\x1b\[[0-9;]*m/g, '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+            // Match all http://localhost:PORT or http://127.0.0.1:PORT
+            const matches = [...cleanOutput.matchAll(/http:\/\/(localhost|127\.0\.0\.1):\d+/gi)];
+            if (matches.length > 0) {
+              const url = matches[matches.length - 1][0];
               if (devServerUrl !== url) {
                 devServerUrl = url;
                 lastContent = null;
