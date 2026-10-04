@@ -3,195 +3,232 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Codetist Live Preview</title>
+  <title>Live Preview</title>
   <style>
-    body {
+    :root {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-input: #3c3c3c;
+      --text-main: #cccccc;
+      --border-color: #333333;
+      --button-hover: rgba(255, 255, 255, 0.1);
+      --accent: #0e639c;
+    }
+
+    * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
+    }
+
+    body {
       width: 100vw;
       height: 100vh;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
-      background: white;
+      background: var(--bg-primary);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
+
+    /* Native VS Code Header Toolbar */
+    .toolbar {
+      height: 38px;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      gap: 6px;
+      user-select: none;
+      z-index: 100;
+    }
+
+    .tool-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0.8;
+      transition: opacity 0.15s, background-color 0.15s;
+    }
+
+    .tool-btn:hover {
+      opacity: 1;
+      background-color: var(--button-hover);
+    }
+
+    .tool-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+
+    /* VS Code Address Bar Input */
+    .address-bar {
+      flex: 1;
+      height: 24px;
+      background: var(--bg-input);
+      border: 1px solid transparent;
+      border-radius: 2px;
+      padding: 0 8px;
+      color: #ffffff;
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .address-bar:focus {
+      border-color: var(--accent);
+    }
+
+    /* Preview Workspace */
+    #viewport {
+      flex: 1;
+      position: relative;
+      background: #ffffff;
+    }
+
     iframe {
       width: 100%;
       height: 100%;
       border: none;
+      background: #ffffff;
     }
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-center: center;
-      height: 100%;
-      font-family: system-ui, -apple-system, sans-serif;
-      color: #666;
-      background: #f5f5f5;
-    }
-    .empty-state-content {
-      margin-top: 40vh;
-      text-align: center;
-    }
-    .pill-bar {
+
+    /* Standby Overlay (No crude empty state cards) */
+    .standby-state {
       position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(20, 20, 20, 0.85);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border-radius: 9999px;
-      padding: 6px 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 50;
-      color: white;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 11px;
-      transition: all 0.2s;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    .pill-bar:hover {
-      background: rgba(0, 0, 0, 0.95);
-      transform: translateX(-50%) translateY(-2px);
-    }
-    .pill-url {
-      opacity: 0.9;
-      font-family: monospace;
-      letter-spacing: 0.3px;
-    }
-    .pill-refresh {
-      cursor: pointer;
-      opacity: 0.7;
+      inset: 0;
+      background: var(--bg-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s;
-      border: none;
-      background: transparent;
-      color: white;
-      padding: 4px;
-      border-radius: 50%;
-    }
-    .pill-refresh:hover {
-      opacity: 1;
-      background: rgba(255, 255, 255, 0.15);
-    }
-    .pill-refresh svg {
-      width: 14px;
-      height: 14px;
+      color: #858585;
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <div class="empty-state">
-      <div class="empty-state-content">
-        <h3>Live Preview</h3>
-        <p>Open an HTML file to preview it.</p>
-      </div>
-    </div>
+
+  <!-- Top VS Code Navigation Bar -->
+  <div class="toolbar">
+    <button class="tool-btn" id="btn-refresh" title="Reload Page">
+      <svg viewBox="0 0 16 16">
+        <path d="M13.6 2.4A7 7 0 1 0 15 8h-1.5a5.5 5.5 0 1 1-1.1-3.4L10 7h5V2l-1.4 0.4z"/>
+      </svg>
+    </button>
+    <input type="text" id="address-input" class="address-bar" placeholder="about:blank" spellcheck="false">
+  </div>
+
+  <!-- Main Viewport -->
+  <div id="viewport">
+    <div id="standby" class="standby-state">Waiting for active document or dev server...</div>
+    <iframe id="preview-frame" style="display: none;"></iframe>
   </div>
 
   <script>
-    const container = document.getElementById('container');
+    const frame = document.getElementById('preview-frame');
+    const standby = document.getElementById('standby');
+    const addressInput = document.getElementById('address-input');
+    const btnRefresh = document.getElementById('btn-refresh');
+
     let currentPath = null;
-    let pollInterval = null;
     let lastContent = null;
     let devServerUrl = null;
 
-    // Use the native Codetist ideAPI injected by the IDE
-    async function loadActiveFile() {
+    async function updatePreview() {
       if (!window.ideAPI) return;
 
       try {
-        // 1. Check if there's a running dev server in the terminal
+        // 1. Check for running dev server in terminal output
         if (typeof window.ideAPI.getTerminalOutput === 'function') {
           const terminalOutput = await window.ideAPI.getTerminalOutput();
           if (terminalOutput) {
-            // Strip ANSI codes from the output (e.g. colors, bold)
-            const cleanOutput = terminalOutput.replace(/\x1b\[[0-9;]*m/g, '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-            // Match all http://localhost:PORT or http://127.0.0.1:PORT
+            const cleanOutput = terminalOutput.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
             const matches = [...cleanOutput.matchAll(/http:\/\/(localhost|127\.0\.0\.1):\d+/gi)];
+
             if (matches.length > 0) {
               const url = matches[matches.length - 1][0];
               if (devServerUrl !== url) {
                 devServerUrl = url;
-                lastContent = null;
                 currentPath = null;
-                renderDevServer(url);
+                lastContent = null;
+
+                addressInput.value = url;
+                frame.src = url;
+                showFrame();
               }
-              return; // We found a dev server, skip HTML file preview
+              return;
             } else {
               devServerUrl = null;
             }
           }
         }
 
-        // 2. If no dev server, fallback to the active HTML file
+        // 2. Fetch Active File Path
         const activePath = await window.ideAPI.getActiveFilePath();
-        
-        if (!activePath) {
-          showEmptyState();
-          return;
-        }
+        if (!activePath) return;
 
-        if (!activePath.endsWith('.html')) {
-          showEmptyState('Open an HTML file or run a dev server (npm run dev) to preview.');
-          return;
-        }
-
+        // Reads the active path or opens associated HTML files
         const content = await window.ideAPI.readFile(activePath);
-        
-        if (content !== lastContent) {
+        if (!content) return;
+
+        addressInput.value = activePath;
+
+        if (content !== lastContent || activePath !== currentPath) {
           lastContent = content;
-          renderPreview(content, activePath);
+          currentPath = activePath;
+
+          // Render via Blob URL
+          const blob = new Blob([content], { type: 'text/html' });
+          const blobUrl = URL.createObjectURL(blob);
+          
+          frame.src = blobUrl;
+          showFrame();
         }
-        
-        currentPath = activePath;
       } catch (err) {
         console.error('Preview error:', err);
       }
     }
 
-    function renderDevServer(url) {
-      container.innerHTML = `
-        <iframe id="preview-frame" src="${url}"></iframe>
-        <div class="pill-bar">
-          <div class="pill-url">${url}</div>
-          <button class="pill-refresh" onclick="document.getElementById('preview-frame').contentWindow.location.reload();" title="Refresh">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          </button>
-        </div>
-      `;
+    function showFrame() {
+      standby.style.display = 'none';
+      frame.style.display = 'block';
     }
 
-    function renderPreview(html, path) {
-      // Create a blob URL to act as a proper origin for relative assets if needed
-      // (Though the IDE serves relative assets through its own mechanism)
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      
-      container.innerHTML = `<iframe src="${url}"></iframe>`;
-    }
+    // Refresh button event
+    btnRefresh.addEventListener('click', () => {
+      if (devServerUrl) {
+        frame.src = devServerUrl;
+      } else if (frame.src) {
+        updatePreview();
+      }
+    });
 
-    function showEmptyState(msg = 'Open an HTML file to preview it.') {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-content">
-            <h3>Live Preview</h3>
-            <p>${msg}</p>
-          </div>
-        </div>
-      `;
-    }
+    // Address bar manually entered navigation
+    addressInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const value = addressInput.value.trim();
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          devServerUrl = value;
+          frame.src = value;
+          showFrame();
+        }
+      }
+    });
 
-    // Poll for changes every second
-    // (A more advanced extension would listen to window.ideAPI.on('fileChanged'))
-    pollInterval = setInterval(loadActiveFile, 1000);
-    loadActiveFile();
+    // 500ms active file polling rate
+    setInterval(updatePreview, 500);
+    updatePreview();
   </script>
 </body>
 </html>
