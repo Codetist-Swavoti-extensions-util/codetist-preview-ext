@@ -4,15 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Preview</title>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Local Client-Side QR Code Generator CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <!-- WASM Browser Runtime CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@quickjs-wasm/core@0.27.0/dist/index.umd.js"></script>
+
   <style>
     :root {
       --bg-primary: #1e1e1e;
       --bg-secondary: #252526;
       --bg-input: #3c3c3c;
+      --bg-hover: #2a2d2e;
       --text-main: #cccccc;
-      --border-color: #333333;
-      --button-hover: rgba(255, 255, 255, 0.1);
-      --accent: #0e639c;
+      --border-color: #383838;
+      --button-hover: rgba(255, 255, 255, 0.08);
+      --accent: #007acc;
+      --progress-blue: #0078d4;
+      --console-bg: #181818;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
     }
 
     * {
@@ -32,32 +46,62 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
-    /* Native VS Code Header Toolbar */
+    /* Edge-style top progress bar container */
+    .progress-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: transparent;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--progress-blue);
+      box-shadow: 0 0 8px var(--progress-blue);
+      transition: width 0.2s ease, opacity 0.3s ease;
+      opacity: 0;
+      border-radius: 0 2px 2px 0;
+    }
+
+    .progress-bar.active {
+      opacity: 1;
+    }
+
     .toolbar {
-      height: 38px;
+      position: relative;
+      height: 40px;
       background-color: var(--bg-secondary);
       border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
-      padding: 0 8px;
+      padding: 0 10px;
       gap: 6px;
       user-select: none;
       z-index: 100;
+      flex-wrap: nowrap;
     }
 
     .tool-btn {
       background: transparent;
-      border: none;
+      border: 1px solid transparent;
       color: var(--text-main);
-      width: 26px;
-      height: 26px;
-      border-radius: 4px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: var(--radius-sm);
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 5px;
       cursor: pointer;
-      opacity: 0.8;
-      transition: opacity 0.15s, background-color 0.15s;
+      opacity: 0.85;
+      font-size: 11px;
+      transition: all 0.15s ease;
+      position: relative;
     }
 
     .tool-btn:hover {
@@ -65,19 +109,39 @@
       background-color: var(--button-hover);
     }
 
-    .tool-btn svg {
-      width: 15px;
-      height: 15px;
-      fill: currentColor;
+    .tool-btn.active {
+      background-color: rgba(255, 255, 255, 0.12);
+      opacity: 1;
+      color: #ffffff;
     }
 
-    /* VS Code Address Bar Input */
-    .address-bar {
+    .tool-btn i, .tool-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+    }
+
+    .divider {
+      width: 1px;
+      height: 18px;
+      background-color: var(--border-color);
+      margin: 0 2px;
+    }
+
+    .address-bar-wrapper {
       flex: 1;
-      height: 24px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-width: 120px;
+    }
+
+    .address-bar {
+      width: 100%;
+      height: 26px;
       background: var(--bg-input);
       border: 1px solid transparent;
-      border-radius: 2px;
+      border-radius: var(--radius-sm);
       padding: 0 8px;
       color: #ffffff;
       font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
@@ -90,11 +154,105 @@
       border-color: var(--accent);
     }
 
-    /* Preview Workspace */
+    .dim-badge {
+      font-size: 10px;
+      color: #858585;
+      font-family: SFMono-Regular, monospace;
+      padding: 0 6px;
+      white-space: nowrap;
+      background: var(--bg-input);
+      border-radius: var(--radius-sm);
+      height: 22px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* Dropdown Menu Container */
+    .dropdown-wrapper {
+      position: relative;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 34px;
+      left: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 4px;
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+      z-index: 300;
+      min-width: 160px;
+    }
+
+    .dropdown-menu.show {
+      display: flex;
+    }
+
+    .dropdown-item {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    .dropdown-item:hover {
+      background: var(--button-hover);
+      color: #ffffff;
+    }
+
+    .dropdown-item.selected {
+      background: var(--bg-input);
+      color: #ffffff;
+    }
+
     #viewport {
       flex: 1;
       position: relative;
+      background: #181818;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 8px;
+    }
+
+    .frame-container {
+      width: 100%;
+      height: 100%;
+      transition: width 0.25s ease, height 0.25s ease;
       background: #ffffff;
+      position: relative;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .frame-container.device-mobile {
+      width: 390px;
+      height: 844px;
+      max-height: calc(100% - 10px);
+      border-radius: var(--radius-lg);
+      border: 8px solid #333333;
+    }
+
+    .frame-container.device-tablet {
+      width: 768px;
+      height: 1024px;
+      max-height: calc(100% - 10px);
+      border-radius: var(--radius-lg);
+      border: 8px solid #333333;
     }
 
     iframe {
@@ -104,52 +262,492 @@
       background: #ffffff;
     }
 
-    /* Standby Overlay (No crude empty state cards) */
-    .standby-state {
-      position: absolute;
-      inset: 0;
-      background: var(--bg-primary);
+    /* Console Panel Drawer */
+    .console-panel {
+      width: 100%;
+      height: 150px;
+      background: var(--console-bg);
+      border-top: 1px solid var(--border-color);
+      display: none;
+      flex-direction: column;
+      font-family: SFMono-Regular, Consolas, monospace;
+      font-size: 11px;
+      z-index: 50;
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+
+    .console-panel.open {
+      display: flex;
+    }
+
+    .console-header {
+      height: 28px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
-      justify-content: center;
-      color: #858585;
-      font-size: 13px;
+      justify-content: space-between;
+      padding: 0 10px;
+      color: #aaa;
+    }
+
+    .console-logs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .log-item {
+      display: flex;
+      gap: 8px;
+      padding: 3px 6px;
+      border-radius: var(--radius-sm);
+      color: #cccccc;
+    }
+
+    .log-item.warn { color: #cca700; background: rgba(204, 167, 0, 0.1); }
+    .log-item.error { color: #f14c4c; background: rgba(241, 76, 76, 0.1); }
+
+    /* Modal / Popover Styling */
+    .qr-modal {
+      position: absolute;
+      top: 46px;
+      right: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.6);
+      z-index: 200;
+      color: #fff;
+    }
+
+    .qr-modal.active { display: flex; }
+    
+    #qr-canvas {
+      background: #ffffff;
+      padding: 6px;
+      border-radius: var(--radius-sm);
     }
   </style>
 </head>
 <body>
 
-  <!-- Top VS Code Navigation Bar -->
-  <div class="toolbar">
-    <button class="tool-btn" id="btn-refresh" title="Reload Page">
-      <svg viewBox="0 0 16 16">
-        <path d="M13.6 2.4A7 7 0 1 0 15 8h-1.5a5.5 5.5 0 1 1-1.1-3.4L10 7h5V2l-1.4 0.4z"/>
-      </svg>
-    </button>
-    <input type="text" id="address-input" class="address-bar" placeholder="about:blank" spellcheck="false">
+  <div class="progress-container">
+    <div id="progress-bar" class="progress-bar"></div>
   </div>
 
-  <!-- Main Viewport -->
+  <div class="toolbar">
+    <button class="tool-btn" id="btn-refresh" title="Reload Page">
+      <i data-lucide="rotate-cw"></i>
+    </button>
+    
+    <!-- Live Sync Toggle Button -->
+    <button class="tool-btn" id="btn-auto-reload" title="Toggle Live Sync on Edit">
+      <i data-lucide="refresh-cw"></i>
+    </button>
+
+    <div class="divider"></div>
+
+    <div class="address-bar-wrapper">
+      <input type="text" id="address-input" class="address-bar" placeholder="about:blank" spellcheck="false">
+    </div>
+
+    <span id="dim-indicator" class="dim-badge">100%</span>
+
+    <div class="divider"></div>
+
+    <!-- Device Emulation Single Icon + Dropdown -->
+    <div class="dropdown-wrapper">
+      <button class="tool-btn" id="btn-device-dropdown" title="Select Device Emulation View">
+        <i id="device-icon" data-lucide="monitor"></i>
+        <i data-lucide="chevron-down" style="width:10px; height:10px;"></i>
+      </button>
+
+      <div id="device-menu" class="dropdown-menu">
+        <button class="dropdown-item selected" data-device="desktop">
+          <span>Desktop View</span>
+          <span style="opacity:0.6; font-size:9px;">100%</span>
+        </button>
+        <button class="dropdown-item" data-device="mobile">
+          <span>Mobile View</span>
+          <span style="opacity:0.6; font-size:9px;">390×844</span>
+        </button>
+        <button class="dropdown-item" data-device="tablet">
+          <span>Tablet View</span>
+          <span style="opacity:0.6; font-size:9px;">768×1024</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Interactive Tools -->
+    <button class="tool-btn" id="btn-inspect" title="Inspect Element Tool">
+      <i data-lucide="crosshair"></i>
+    </button>
+
+    <button class="tool-btn" id="btn-theme-toggle" title="Emulate Dark/Light Theme">
+      <i data-lucide="sun-moon"></i>
+    </button>
+
+    <button class="tool-btn" id="btn-console" title="Toggle Console Panel">
+      <i data-lucide="terminal"></i>
+    </button>
+
+    <button class="tool-btn" id="btn-qr" title="Generate Mobile Test QR Code">
+      <i data-lucide="qr-code"></i>
+    </button>
+
+    <button class="tool-btn" id="btn-external" title="Open in External Browser">
+      <i data-lucide="external-link"></i>
+    </button>
+  </div>
+
+  <!-- QR Popover Dialog -->
+  <div id="qr-modal" class="qr-modal">
+    <span style="font-size: 11px; font-weight: 600;">Scan to Test on Mobile</span>
+    <canvas id="qr-canvas"></canvas>
+    <span id="qr-url" style="font-size: 10px; color: #858585; max-width: 180px; text-align: center; word-break: break-all;">http://localhost:3000</span>
+  </div>
+
   <div id="viewport">
-    <div id="standby" class="standby-state">Waiting for active document or dev server...</div>
-    <iframe id="preview-frame" style="display: none;"></iframe>
+    <div id="frame-container" class="frame-container">
+      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+    </div>
+  </div>
+
+  <!-- Embedded DevTools Console -->
+  <div id="console-panel" class="console-panel">
+    <div class="console-header">
+      <span>Console Logs</span>
+      <button id="btn-clear-console" style="background:none; border:none; color:#aaa; cursor:pointer; font-size:10px;">Clear</button>
+    </div>
+    <div id="console-logs" class="console-logs"></div>
   </div>
 
   <script>
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+
     const frame = document.getElementById('preview-frame');
-    const standby = document.getElementById('standby');
+    const frameContainer = document.getElementById('frame-container');
     const addressInput = document.getElementById('address-input');
     const btnRefresh = document.getElementById('btn-refresh');
+    const progressBar = document.getElementById('progress-bar');
+    const dimIndicator = document.getElementById('dim-indicator');
+
+    // Controls
+    const btnAutoReload = document.getElementById('btn-auto-reload');
+    const syncDot = document.getElementById('sync-dot');
+    const btnDeviceDropdown = document.getElementById('btn-device-dropdown');
+    const deviceMenu = document.getElementById('device-menu');
+    const deviceIcon = document.getElementById('device-icon');
+    
+    const btnInspect = document.getElementById('btn-inspect');
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    const btnConsole = document.getElementById('btn-console');
+    const btnQr = document.getElementById('btn-qr');
+    const btnExternal = document.getElementById('btn-external');
+    
+    const consolePanel = document.getElementById('console-panel');
+    const consoleLogs = document.getElementById('console-logs');
+    const btnClearConsole = document.getElementById('btn-clear-console');
+    const qrModal = document.getElementById('qr-modal');
 
     let currentPath = null;
     let lastContent = null;
     let devServerUrl = null;
+    let isAutoReload = true;
+    let isInspectActive = false;
+    let isDarkModeEmulated = false;
+    let wasmContext = null;
+
+    async function initWASMEngine() {
+      try {
+        if (window.QuickJS) {
+          wasmContext = await window.QuickJS.getQuickJS();
+          appendConsoleLog('log', '⚡ WASM Browser Runtime Ready');
+        }
+      } catch (err) {
+        appendConsoleLog('warn', 'WASM module initialized in sandbox fallback mode');
+      }
+    }
+
+    function startProgress() {
+      progressBar.classList.add('active');
+      progressBar.style.width = '25%';
+      setTimeout(() => { progressBar.style.width = '65%'; }, 120);
+      setTimeout(() => { progressBar.style.width = '85%'; }, 280);
+    }
+
+    function completeProgress() {
+      progressBar.style.width = '100%';
+      setTimeout(() => {
+        progressBar.classList.remove('active');
+        progressBar.style.width = '0%';
+      }, 220);
+    }
+
+    btnDeviceDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deviceMenu.classList.toggle('show');
+    });
+
+    document.addEventListener('click', () => {
+      deviceMenu.classList.remove('show');
+    });
+
+    document.querySelectorAll('.dropdown-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+
+        const device = item.dataset.device;
+        setDeviceMode(device);
+        deviceMenu.classList.remove('show');
+      });
+    });
+
+    function setDeviceMode(mode) {
+      frameContainer.classList.remove('device-mobile', 'device-tablet');
+
+      if (mode === 'mobile') {
+        frameContainer.classList.add('device-mobile');
+        dimIndicator.textContent = '390 × 844';
+        deviceIcon.setAttribute('data-lucide', 'smartphone');
+      } else if (mode === 'tablet') {
+        frameContainer.classList.add('device-tablet');
+        dimIndicator.textContent = '768 × 1024';
+        deviceIcon.setAttribute('data-lucide', 'tablet');
+      } else {
+        dimIndicator.textContent = '100%';
+        deviceIcon.setAttribute('data-lucide', 'monitor');
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    btnConsole.addEventListener('click', () => {
+      consolePanel.classList.toggle('open');
+      btnConsole.classList.toggle('active');
+    });
+
+    btnClearConsole.addEventListener('click', () => {
+      consoleLogs.innerHTML = '';
+    });
+
+    function appendConsoleLog(type, msg) {
+      const item = document.createElement('div');
+      item.className = `log-item ${type}`;
+      const time = new Date().toLocaleTimeString();
+      item.textContent = `[${time}] ${msg}`;
+      consoleLogs.appendChild(item);
+      consoleLogs.scrollTop = consoleLogs.scrollHeight;
+    }
+
+    function injectDevToolsHooks() {
+      try {
+        const win = frame.contentWindow;
+        if (!win) return;
+
+        ['log', 'warn', 'error'].forEach(level => {
+          const original = win.console[level];
+          win.console[level] = (...args) => {
+            if (original) original.apply(win.console, args);
+            appendConsoleLog(level, args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+          };
+        });
+      } catch (err) {}
+    }
+
+    btnInspect.addEventListener('click', () => {
+      isInspectActive = !isInspectActive;
+      btnInspect.classList.toggle('active', isInspectActive);
+      toggleInspector(isInspectActive);
+    });
+
+    function toggleInspector(active) {
+      try {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+
+        let overlay = doc.getElementById('__inspector_overlay');
+        let tooltip = doc.getElementById('__inspector_tooltip');
+
+        if (active) {
+          if (!overlay) {
+            overlay = doc.createElement('div');
+            overlay.id = '__inspector_overlay';
+            overlay.style.cssText = 'position:fixed; pointer-events:none; z-index:999999; background:rgba(0, 122, 204, 0.25); border:1px solid #007acc; border-radius:3px; transition:all 0.05s ease; display:none;';
+            doc.body.appendChild(overlay);
+          }
+          if (!tooltip) {
+            tooltip = doc.createElement('div');
+            tooltip.id = '__inspector_tooltip';
+            tooltip.style.cssText = 'position:fixed; pointer-events:none; z-index:1000000; background:#1e1e1e; color:#007acc; border:1px solid #007acc; padding:4px 8px; border-radius:4px; font-family:monospace; font-size:11px; box-shadow:0 4px 12px rgba(0,0,0,0.5); display:none; white-space:nowrap;';
+            doc.body.appendChild(tooltip);
+          }
+          doc.body.style.cursor = 'crosshair';
+          doc.addEventListener('mousemove', handleInspectMouseMove);
+          doc.addEventListener('click', handleInspectClick, true);
+        } else {
+          doc.body.style.cursor = 'default';
+          doc.removeEventListener('mousemove', handleInspectMouseMove);
+          doc.removeEventListener('click', handleInspectClick, true);
+          if (overlay) overlay.style.display = 'none';
+          if (tooltip) tooltip.style.display = 'none';
+        }
+      } catch (err) {}
+    }
+
+    function handleInspectMouseMove(e) {
+      if (!isInspectActive) return;
+      const target = e.target;
+      const doc = frame.contentDocument;
+      if (!doc || target.id === '__inspector_overlay' || target.id === '__inspector_tooltip') return;
+
+      const rect = target.getBoundingClientRect();
+      const overlay = doc.getElementById('__inspector_overlay');
+      const tooltip = doc.getElementById('__inspector_tooltip');
+
+      if (overlay) {
+        overlay.style.display = 'block';
+        overlay.style.top = `${rect.top}px`;
+        overlay.style.left = `${rect.left}px`;
+        overlay.style.width = `${rect.width}px`;
+        overlay.style.height = `${rect.height}px`;
+      }
+
+      if (tooltip) {
+        tooltip.style.display = 'block';
+        const tag = target.tagName.toLowerCase();
+        const id = target.id ? `#${target.id}` : '';
+        const cls = target.className && typeof target.className === 'string' ? `.${target.className.trim().split(/\s+/).join('.')}` : '';
+        tooltip.innerHTML = `<span style="color:#4fc1ff;font-weight:bold">${tag}</span><span style="color:#ce9178">${id}${cls}</span> <span style="color:#808080">${Math.round(rect.width)}×${Math.round(rect.height)}px</span>`;
+
+        let top = rect.top - 28;
+        if (top < 4) top = rect.bottom + 6;
+        let left = Math.max(4, rect.left);
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+      }
+    }
+
+    function handleInspectClick(e) {
+      if (!isInspectActive) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const target = e.target;
+      const tag = target.tagName.toLowerCase();
+      const id = target.id ? `#${target.id}` : '';
+      const cls = target.className && typeof target.className === 'string' ? `.${target.className.trim().split(/\s+/).join('.')}` : '';
+      const rect = target.getBoundingClientRect();
+
+      const computed = frame.contentWindow.getComputedStyle(target);
+      appendConsoleLog('log', `🔍 <${tag}${id}${cls}> (${Math.round(rect.width)}x${Math.round(rect.height)}px) | Font: ${computed.fontSize} | Color: ${computed.color}`);
+
+      if (!consolePanel.classList.contains('open')) {
+        consolePanel.classList.add('open');
+        btnConsole.classList.add('active');
+      }
+    }
+
+    btnThemeToggle.addEventListener('click', () => {
+      isDarkModeEmulated = !isDarkModeEmulated;
+      btnThemeToggle.classList.toggle('active', isDarkModeEmulated);
+      try {
+        const doc = frame.contentDocument;
+        if (doc) {
+          doc.documentElement.style.colorScheme = isDarkModeEmulated ? 'dark' : 'light';
+        }
+      } catch (err) {}
+    });
+
+    btnExternal.addEventListener('click', () => {
+      const url = devServerUrl || addressInput.value;
+      if (url && url !== 'about:blank') {
+        window.open(url, '_blank');
+      }
+    });
+
+    btnAutoReload.addEventListener('click', () => {
+      isAutoReload = !isAutoReload;
+      btnAutoReload.classList.toggle('active', isAutoReload);
+    });
+
+    btnQr.addEventListener('click', () => {
+      const activeUrl = devServerUrl || addressInput.value;
+      if (!activeUrl || activeUrl === 'about:blank') return;
+
+      const isVisible = qrModal.classList.contains('active');
+      if (isVisible) {
+        qrModal.classList.remove('active');
+        btnQr.classList.remove('active');
+      } else {
+        const canvas = document.getElementById('qr-canvas');
+        if (window.QRCode) {
+          QRCode.toCanvas(canvas, activeUrl, { width: 140, margin: 1 }, function (error) {
+            if (error) console.error(error);
+          });
+        }
+        document.getElementById('qr-url').textContent = activeUrl;
+        qrModal.classList.add('active');
+        btnQr.classList.add('active');
+      }
+    });
+
+    async function loadStaticDocument(filePath, content) {
+      startProgress();
+      const doc = frame.contentWindow.document;
+      doc.open();
+      
+      const baseDir = filePath.substring(0, filePath.lastIndexOf('/') + 1);
+      const injectedBase = content.includes('<head>')
+        ? content.replace('<head>', `<head><base href="${baseDir}">`)
+        : `<base href="${baseDir}">${content}`;
+
+      doc.write(injectedBase);
+      doc.close();
+
+      injectDevToolsHooks();
+      completeProgress();
+    }
+
+    async function loadDevServer(url) {
+      startProgress();
+      try {
+        const response = await fetch(url, { mode: 'cors' });
+        let html = await response.text();
+
+        html = html.replace(/(href|src)=["']\/(?!\/)/g, `$1="${url}/`);
+
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        doc.open();
+        doc.write(html);
+        doc.close();
+
+        injectDevToolsHooks();
+        completeProgress();
+      } catch (err) {
+        frame.src = url;
+        completeProgress();
+      }
+    }
 
     async function updatePreview() {
-      if (!window.ideAPI) return;
+      if (!window.ideAPI || !isAutoReload) return;
 
       try {
-        // 1. Check for running dev server in terminal output
         if (typeof window.ideAPI.getTerminalOutput === 'function') {
           const terminalOutput = await window.ideAPI.getTerminalOutput();
           if (terminalOutput) {
@@ -164,8 +762,7 @@
                 lastContent = null;
 
                 addressInput.value = url;
-                frame.src = url;
-                showFrame();
+                await loadDevServer(url);
               }
               return;
             } else {
@@ -174,11 +771,9 @@
           }
         }
 
-        // 2. Fetch Active File Path
         const activePath = await window.ideAPI.getActiveFilePath();
         if (!activePath) return;
 
-        // Reads the active path or opens associated HTML files
         const content = await window.ideAPI.readFile(activePath);
         if (!content) return;
 
@@ -187,46 +782,32 @@
         if (content !== lastContent || activePath !== currentPath) {
           lastContent = content;
           currentPath = activePath;
-
-          // Render via Blob URL
-          const blob = new Blob([content], { type: 'text/html' });
-          const blobUrl = URL.createObjectURL(blob);
-          
-          frame.src = blobUrl;
-          showFrame();
+          await loadStaticDocument(activePath, content);
         }
       } catch (err) {
         console.error('Preview error:', err);
       }
     }
 
-    function showFrame() {
-      standby.style.display = 'none';
-      frame.style.display = 'block';
-    }
-
-    // Refresh button event
     btnRefresh.addEventListener('click', () => {
       if (devServerUrl) {
-        frame.src = devServerUrl;
-      } else if (frame.src) {
-        updatePreview();
+        loadDevServer(devServerUrl);
+      } else if (currentPath && lastContent) {
+        loadStaticDocument(currentPath, lastContent);
       }
     });
 
-    // Address bar manually entered navigation
     addressInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const value = addressInput.value.trim();
         if (value.startsWith('http://') || value.startsWith('https://')) {
           devServerUrl = value;
-          frame.src = value;
-          showFrame();
+          loadDevServer(value);
         }
       }
     });
 
-    // 500ms active file polling rate
+    initWASMEngine();
     setInterval(updatePreview, 500);
     updatePreview();
   </script>
