@@ -160,11 +160,13 @@
       font-family: SFMono-Regular, monospace;
       padding: 0 6px;
       white-space: nowrap;
-      background: var(--bg-input);
-      border-radius: var(--radius-sm);
       height: 22px;
-      display: flex;
+      display: none;
       align-items: center;
+    }
+
+    .dim-badge.visible {
+      display: flex;
     }
 
     /* Dropdown Menu Container */
@@ -225,7 +227,7 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      padding: 8px;
+      padding: 0;
     }
 
     .frame-container {
@@ -234,25 +236,26 @@
       transition: width 0.25s ease, height 0.25s ease;
       background: #ffffff;
       position: relative;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-      border-radius: var(--radius-md);
+      border-radius: 0;
       overflow: hidden;
     }
 
     .frame-container.device-mobile {
       width: 390px;
       height: 844px;
-      max-height: calc(100% - 10px);
+      max-height: calc(100% - 16px);
       border-radius: var(--radius-lg);
       border: 8px solid #333333;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
     }
 
     .frame-container.device-tablet {
       width: 768px;
       height: 1024px;
-      max-height: calc(100% - 10px);
+      max-height: calc(100% - 16px);
       border-radius: var(--radius-lg);
       border: 8px solid #333333;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
     }
 
     iframe {
@@ -418,12 +421,8 @@
   </div>
 
   <div class="toolbar">
-    <button class="tool-btn" id="btn-refresh" title="Reload Page">
-      <i data-lucide="rotate-cw"></i>
-    </button>
-    
     <!-- Live Sync Toggle Button -->
-    <button class="tool-btn" id="btn-auto-reload" title="Toggle Live Sync on Edit">
+    <button class="tool-btn active" id="btn-auto-reload" title="Toggle Live Sync on Edit">
       <i data-lucide="refresh-cw"></i>
     </button>
 
@@ -433,7 +432,7 @@
       <input type="text" id="address-input" class="address-bar" placeholder="about:blank" spellcheck="false">
     </div>
 
-    <span id="dim-indicator" class="dim-badge">100%</span>
+    <span id="dim-indicator" class="dim-badge"></span>
 
     <div class="divider"></div>
 
@@ -449,7 +448,6 @@
       <div id="device-menu" class="dropdown-menu">
         <button class="dropdown-item selected" data-device="desktop">
           <span>Desktop View</span>
-          <span style="opacity:0.6; font-size:9px;">100%</span>
         </button>
         <button class="dropdown-item" data-device="mobile">
           <span>Mobile View</span>
@@ -527,7 +525,6 @@
     const frame = document.getElementById('preview-frame');
     const frameContainer = document.getElementById('frame-container');
     const addressInput = document.getElementById('address-input');
-    const btnRefresh = document.getElementById('btn-refresh');
     const progressBar = document.getElementById('progress-bar');
     const dimIndicator = document.getElementById('dim-indicator');
 
@@ -540,10 +537,8 @@
 
     // Controls
     const btnAutoReload = document.getElementById('btn-auto-reload');
-    const syncDot = document.getElementById('sync-dot');
     const btnDeviceDropdown = document.getElementById('btn-device-dropdown');
     const deviceMenu = document.getElementById('device-menu');
-    const deviceIcon = document.getElementById('device-icon');
     
     const btnInspect = document.getElementById('btn-inspect');
     const btnThemeToggle = document.getElementById('btn-theme-toggle');
@@ -555,6 +550,8 @@
     const consoleLogs = document.getElementById('console-logs');
     const btnClearConsole = document.getElementById('btn-clear-console');
     const qrModal = document.getElementById('qr-modal');
+    const qrCanvas = document.getElementById('qr-canvas');
+    const qrUrlText = document.getElementById('qr-url');
 
     let currentPath = null;
     let lastContent = null;
@@ -563,6 +560,14 @@
     let isInspectActive = false;
     let isDarkModeEmulated = false;
     let wasmContext = null;
+
+    function appendConsoleLog(type, text) {
+      const item = document.createElement('div');
+      item.className = `log-item ${type}`;
+      item.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+      consoleLogs.appendChild(item);
+      consoleLogs.scrollTop = consoleLogs.scrollHeight;
+    }
 
     async function initWASMEngine() {
       try {
@@ -597,6 +602,7 @@
 
     document.addEventListener('click', () => {
       deviceMenu.classList.remove('show');
+      qrModal.classList.remove('active');
     });
 
     document.querySelectorAll('.dropdown-item').forEach(item => {
@@ -618,13 +624,16 @@
       if (mode === 'mobile') {
         frameContainer.classList.add('device-mobile');
         dimIndicator.textContent = '390 × 844';
+        dimIndicator.classList.add('visible');
         iconName = 'smartphone';
       } else if (mode === 'tablet') {
         frameContainer.classList.add('device-tablet');
         dimIndicator.textContent = '768 × 1024';
+        dimIndicator.classList.add('visible');
         iconName = 'tablet';
       } else {
-        dimIndicator.textContent = '100%';
+        dimIndicator.textContent = '';
+        dimIndicator.classList.remove('visible');
         iconName = 'monitor';
       }
 
@@ -636,6 +645,59 @@
 
     btnConsole.addEventListener('click', () => {
       consolePanel.classList.toggle('open');
+    });
+
+    btnClearConsole.addEventListener('click', () => {
+      consoleLogs.innerHTML = '';
+    });
+
+    btnAutoReload.addEventListener('click', () => {
+      isAutoReload = !isAutoReload;
+      btnAutoReload.classList.toggle('active', isAutoReload);
+      if (isAutoReload) {
+        if (devServerUrl) {
+          loadDevServer(devServerUrl);
+        } else if (currentPath && lastContent) {
+          loadStaticDocument(currentPath, lastContent);
+        }
+      }
+    });
+
+    btnQr.addEventListener('click', (e) => {
+      e.stopPropagation();
+      qrModal.classList.toggle('active');
+      const targetUrl = addressInput.value || 'http://localhost:3000';
+      qrUrlText.textContent = targetUrl;
+      if (window.QRCode) {
+        QRCode.toCanvas(qrCanvas, targetUrl, { width: 140, margin: 1 });
+      }
+    });
+
+    btnExternal.addEventListener('click', () => {
+      const url = addressInput.value;
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        window.open(url, '_blank');
+      }
+    });
+
+    btnThemeToggle.addEventListener('click', () => {
+      isDarkModeEmulated = !isDarkModeEmulated;
+      btnThemeToggle.classList.toggle('active', isDarkModeEmulated);
+      try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        if (doc && doc.documentElement) {
+          doc.documentElement.style.filter = isDarkModeEmulated ? 'invert(1) hue-rotate(180deg)' : 'none';
+        }
+      } catch (err) {
+        appendConsoleLog('error', 'Cannot apply theme to cross-origin frame');
+      }
+    });
+
+    btnInspect.addEventListener('click', () => {
+      isInspectActive = !isInspectActive;
+      btnInspect.classList.toggle('active', isInspectActive);
+    });
+
     function showError(title, desc, url = '') {
       errorTitle.textContent = title;
       errorDesc.replaceChildren();
@@ -663,6 +725,23 @@
         loadStaticDocument(currentPath, lastContent);
       }
     });
+
+    function injectDevToolsHooks() {
+      try {
+        const win = frame.contentWindow;
+        if (!win) return;
+        
+        ['log', 'warn', 'error'].forEach(level => {
+          const original = win.console[level];
+          win.console[level] = function (...args) {
+            appendConsoleLog(level, args.join(' '));
+            if (original) original.apply(win.console, args);
+          };
+        });
+      } catch (e) {
+        // Cross-origin restriction fallback
+      }
+    }
 
     async function loadStaticDocument(filePath, content) {
       startProgress();
@@ -692,7 +771,6 @@
       hideError();
 
       try {
-        // Try fetching first to verify server response
         const response = await fetch(url, { mode: 'cors' });
         if (!response.ok) {
           throw new Error(`Server returned HTTP ${response.status}`);
@@ -708,10 +786,8 @@
 
         injectDevToolsHooks();
       } catch (err) {
-        // If fetch fails (CORS or server down), try setting iframe src directly as fallback
         try {
           frame.src = url;
-          // Check if direct load succeeds or times out
           setTimeout(() => {
             try {
               if (frame.contentWindow.location.href === 'about:blank') {
@@ -773,14 +849,6 @@
         console.error('Preview error:', err);
       }
     }
-
-    btnRefresh.addEventListener('click', () => {
-      if (devServerUrl) {
-        loadDevServer(devServerUrl);
-      } else if (currentPath && lastContent) {
-        loadStaticDocument(currentPath, lastContent);
-      }
-    });
 
     addressInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
