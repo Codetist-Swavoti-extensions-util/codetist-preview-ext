@@ -336,6 +336,79 @@
       padding: 6px;
       border-radius: var(--radius-sm);
     }
+
+    .error-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(24, 24, 24, 0.95);
+      backdrop-filter: blur(4px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      z-index: 20;
+    }
+
+    .error-overlay.active {
+      display: flex;
+    }
+
+    .error-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      max-width: 380px;
+      width: 100%;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .error-icon {
+      width: 44px;
+      height: 44px;
+      color: #f14c4c;
+      background: rgba(241, 76, 76, 0.12);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .error-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .error-desc {
+      font-size: 12px;
+      color: #a0a0a0;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .error-retry-btn {
+      margin-top: 6px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    .error-retry-btn:hover {
+      background-color: #0062a3;
+    }
   </style>
 </head>
 <body>
@@ -367,7 +440,9 @@
     <!-- Device Emulation Single Icon + Dropdown -->
     <div class="dropdown-wrapper">
       <button class="tool-btn" id="btn-device-dropdown" title="Select Device Emulation View">
-        <i id="device-icon" data-lucide="monitor"></i>
+        <span id="device-icon-wrapper" style="display:inline-flex; align-items:center;">
+          <i data-lucide="monitor"></i>
+        </span>
         <i data-lucide="chevron-down" style="width:10px; height:10px;"></i>
       </button>
 
@@ -421,6 +496,17 @@
   <div id="viewport">
     <div id="frame-container" class="frame-container">
       <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+
+      <div id="error-overlay" class="error-overlay">
+        <div class="error-card">
+          <div class="error-icon">
+            <i data-lucide="wifi-off" style="width:22px; height:22px;"></i>
+          </div>
+          <div id="error-title" class="error-title">Localhost Connection Failed</div>
+          <div id="error-desc" class="error-desc">Unable to reach dev server at <span id="error-url" style="color:#007acc; font-family:monospace;">localhost</span>. Verify the server is running and CORS/embedding is allowed.</div>
+          <button id="btn-error-retry" class="error-retry-btn">Retry Connection</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -444,6 +530,13 @@
     const btnRefresh = document.getElementById('btn-refresh');
     const progressBar = document.getElementById('progress-bar');
     const dimIndicator = document.getElementById('dim-indicator');
+
+    const errorOverlay = document.getElementById('error-overlay');
+    const errorTitle = document.getElementById('error-title');
+    const errorDesc = document.getElementById('error-desc');
+    const errorUrl = document.getElementById('error-url');
+    const btnErrorRetry = document.getElementById('btn-error-retry');
+    const deviceIconWrapper = document.getElementById('device-icon-wrapper');
 
     // Controls
     const btnAutoReload = document.getElementById('btn-auto-reload');
@@ -521,212 +614,89 @@
     function setDeviceMode(mode) {
       frameContainer.classList.remove('device-mobile', 'device-tablet');
 
+      let iconName = 'monitor';
       if (mode === 'mobile') {
         frameContainer.classList.add('device-mobile');
         dimIndicator.textContent = '390 × 844';
-        deviceIcon.setAttribute('data-lucide', 'smartphone');
+        iconName = 'smartphone';
       } else if (mode === 'tablet') {
         frameContainer.classList.add('device-tablet');
         dimIndicator.textContent = '768 × 1024';
-        deviceIcon.setAttribute('data-lucide', 'tablet');
+        iconName = 'tablet';
       } else {
         dimIndicator.textContent = '100%';
-        deviceIcon.setAttribute('data-lucide', 'monitor');
+        iconName = 'monitor';
       }
-      if (window.lucide) lucide.createIcons();
+
+      if (deviceIconWrapper) {
+        deviceIconWrapper.innerHTML = `<i data-lucide="${iconName}"></i>`;
+        if (window.lucide) lucide.createIcons({ targets: [deviceIconWrapper] });
+      }
     }
 
     btnConsole.addEventListener('click', () => {
       consolePanel.classList.toggle('open');
-      btnConsole.classList.toggle('active');
-    });
-
-    btnClearConsole.addEventListener('click', () => {
-      consoleLogs.innerHTML = '';
-    });
-
-    function appendConsoleLog(type, msg) {
-      const item = document.createElement('div');
-      item.className = `log-item ${type}`;
-      const time = new Date().toLocaleTimeString();
-      item.textContent = `[${time}] ${msg}`;
-      consoleLogs.appendChild(item);
-      consoleLogs.scrollTop = consoleLogs.scrollHeight;
-    }
-
-    function injectDevToolsHooks() {
-      try {
-        const win = frame.contentWindow;
-        if (!win) return;
-
-        ['log', 'warn', 'error'].forEach(level => {
-          const original = win.console[level];
-          win.console[level] = (...args) => {
-            if (original) original.apply(win.console, args);
-            appendConsoleLog(level, args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
-          };
-        });
-      } catch (err) {}
-    }
-
-    btnInspect.addEventListener('click', () => {
-      isInspectActive = !isInspectActive;
-      btnInspect.classList.toggle('active', isInspectActive);
-      toggleInspector(isInspectActive);
-    });
-
-    function toggleInspector(active) {
-      try {
-        const doc = frame.contentDocument;
-        if (!doc) return;
-
-        let overlay = doc.getElementById('__inspector_overlay');
-        let tooltip = doc.getElementById('__inspector_tooltip');
-
-        if (active) {
-          if (!overlay) {
-            overlay = doc.createElement('div');
-            overlay.id = '__inspector_overlay';
-            overlay.style.cssText = 'position:fixed; pointer-events:none; z-index:999999; background:rgba(0, 122, 204, 0.25); border:1px solid #007acc; border-radius:3px; transition:all 0.05s ease; display:none;';
-            doc.body.appendChild(overlay);
-          }
-          if (!tooltip) {
-            tooltip = doc.createElement('div');
-            tooltip.id = '__inspector_tooltip';
-            tooltip.style.cssText = 'position:fixed; pointer-events:none; z-index:1000000; background:#1e1e1e; color:#007acc; border:1px solid #007acc; padding:4px 8px; border-radius:4px; font-family:monospace; font-size:11px; box-shadow:0 4px 12px rgba(0,0,0,0.5); display:none; white-space:nowrap;';
-            doc.body.appendChild(tooltip);
-          }
-          doc.body.style.cursor = 'crosshair';
-          doc.addEventListener('mousemove', handleInspectMouseMove);
-          doc.addEventListener('click', handleInspectClick, true);
-        } else {
-          doc.body.style.cursor = 'default';
-          doc.removeEventListener('mousemove', handleInspectMouseMove);
-          doc.removeEventListener('click', handleInspectClick, true);
-          if (overlay) overlay.style.display = 'none';
-          if (tooltip) tooltip.style.display = 'none';
-        }
-      } catch (err) {}
-    }
-
-    function handleInspectMouseMove(e) {
-      if (!isInspectActive) return;
-      const target = e.target;
-      const doc = frame.contentDocument;
-      if (!doc || target.id === '__inspector_overlay' || target.id === '__inspector_tooltip') return;
-
-      const rect = target.getBoundingClientRect();
-      const overlay = doc.getElementById('__inspector_overlay');
-      const tooltip = doc.getElementById('__inspector_tooltip');
-
-      if (overlay) {
-        overlay.style.display = 'block';
-        overlay.style.top = `${rect.top}px`;
-        overlay.style.left = `${rect.left}px`;
-        overlay.style.width = `${rect.width}px`;
-        overlay.style.height = `${rect.height}px`;
+    function showError(title, desc, url = '') {
+      errorTitle.textContent = title;
+      errorDesc.replaceChildren();
+      const textNode = document.createTextNode(desc + ' ');
+      errorDesc.appendChild(textNode);
+      if (url) {
+        const urlSpan = document.createElement('span');
+        urlSpan.style.color = '#007acc';
+        urlSpan.style.fontFamily = 'monospace';
+        urlSpan.textContent = url;
+        errorDesc.appendChild(urlSpan);
       }
-
-      if (tooltip) {
-        tooltip.style.display = 'block';
-        const tag = target.tagName.toLowerCase();
-        const id = target.id ? `#${target.id}` : '';
-        const cls = target.className && typeof target.className === 'string' ? `.${target.className.trim().split(/\s+/).join('.')}` : '';
-        tooltip.innerHTML = `<span style="color:#4fc1ff;font-weight:bold">${tag}</span><span style="color:#ce9178">${id}${cls}</span> <span style="color:#808080">${Math.round(rect.width)}×${Math.round(rect.height)}px</span>`;
-
-        let top = rect.top - 28;
-        if (top < 4) top = rect.bottom + 6;
-        let left = Math.max(4, rect.left);
-        tooltip.style.top = `${top}px`;
-        tooltip.style.left = `${left}px`;
-      }
+      errorOverlay.classList.add('active');
     }
 
-    function handleInspectClick(e) {
-      if (!isInspectActive) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      const target = e.target;
-      const tag = target.tagName.toLowerCase();
-      const id = target.id ? `#${target.id}` : '';
-      const cls = target.className && typeof target.className === 'string' ? `.${target.className.trim().split(/\s+/).join('.')}` : '';
-      const rect = target.getBoundingClientRect();
-
-      const computed = frame.contentWindow.getComputedStyle(target);
-      appendConsoleLog('log', `🔍 <${tag}${id}${cls}> (${Math.round(rect.width)}x${Math.round(rect.height)}px) | Font: ${computed.fontSize} | Color: ${computed.color}`);
-
-      if (!consolePanel.classList.contains('open')) {
-        consolePanel.classList.add('open');
-        btnConsole.classList.add('active');
-      }
+    function hideError() {
+      errorOverlay.classList.remove('active');
     }
 
-    btnThemeToggle.addEventListener('click', () => {
-      isDarkModeEmulated = !isDarkModeEmulated;
-      btnThemeToggle.classList.toggle('active', isDarkModeEmulated);
-      try {
-        const doc = frame.contentDocument;
-        if (doc) {
-          doc.documentElement.style.colorScheme = isDarkModeEmulated ? 'dark' : 'light';
-        }
-      } catch (err) {}
-    });
-
-    btnExternal.addEventListener('click', () => {
-      const url = devServerUrl || addressInput.value;
-      if (url && url !== 'about:blank') {
-        window.open(url, '_blank');
-      }
-    });
-
-    btnAutoReload.addEventListener('click', () => {
-      isAutoReload = !isAutoReload;
-      btnAutoReload.classList.toggle('active', isAutoReload);
-    });
-
-    btnQr.addEventListener('click', () => {
-      const activeUrl = devServerUrl || addressInput.value;
-      if (!activeUrl || activeUrl === 'about:blank') return;
-
-      const isVisible = qrModal.classList.contains('active');
-      if (isVisible) {
-        qrModal.classList.remove('active');
-        btnQr.classList.remove('active');
-      } else {
-        const canvas = document.getElementById('qr-canvas');
-        if (window.QRCode) {
-          QRCode.toCanvas(canvas, activeUrl, { width: 140, margin: 1 }, function (error) {
-            if (error) console.error(error);
-          });
-        }
-        document.getElementById('qr-url').textContent = activeUrl;
-        qrModal.classList.add('active');
-        btnQr.classList.add('active');
+    btnErrorRetry.addEventListener('click', () => {
+      hideError();
+      if (devServerUrl) {
+        loadDevServer(devServerUrl);
+      } else if (currentPath && lastContent) {
+        loadStaticDocument(currentPath, lastContent);
       }
     });
 
     async function loadStaticDocument(filePath, content) {
       startProgress();
-      const doc = frame.contentWindow.document;
-      doc.open();
-      
-      const baseDir = filePath.substring(0, filePath.lastIndexOf('/') + 1);
-      const injectedBase = content.includes('<head>')
-        ? content.replace('<head>', `<head><base href="${baseDir}">`)
-        : `<base href="${baseDir}">${content}`;
+      hideError();
+      try {
+        const doc = frame.contentWindow.document;
+        doc.open();
+        
+        const baseDir = filePath.substring(0, filePath.lastIndexOf('/') + 1);
+        const injectedBase = content.includes('<head>')
+          ? content.replace('<head>', `<head><base href="${baseDir}">`)
+          : `<base href="${baseDir}">${content}`;
 
-      doc.write(injectedBase);
-      doc.close();
+        doc.write(injectedBase);
+        doc.close();
 
-      injectDevToolsHooks();
-      completeProgress();
+        injectDevToolsHooks();
+      } catch (err) {
+        showError('Static Render Error', 'Failed to compile file preview.', filePath);
+      } finally {
+        completeProgress();
+      }
     }
 
     async function loadDevServer(url) {
       startProgress();
+      hideError();
+
       try {
+        // Try fetching first to verify server response
         const response = await fetch(url, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`Server returned HTTP ${response.status}`);
+        }
         let html = await response.text();
 
         html = html.replace(/(href|src)=["']\/(?!\/)/g, `$1="${url}/`);
@@ -737,9 +707,24 @@
         doc.close();
 
         injectDevToolsHooks();
-        completeProgress();
       } catch (err) {
-        frame.src = url;
+        // If fetch fails (CORS or server down), try setting iframe src directly as fallback
+        try {
+          frame.src = url;
+          // Check if direct load succeeds or times out
+          setTimeout(() => {
+            try {
+              if (frame.contentWindow.location.href === 'about:blank') {
+                showError('Dev Server Unreachable', 'Could not establish connection to ', url);
+              }
+            } catch(e) {
+              // Cross-origin load succeeded if origin check throws
+            }
+          }, 1500);
+        } catch(e) {
+          showError('Connection Error', 'Failed to connect to dev server at ', url);
+        }
+      } finally {
         completeProgress();
       }
     }
